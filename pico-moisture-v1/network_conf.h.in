@@ -1,0 +1,9 @@
+#ifndef _NETWORK_CONF_H
+#define _NETWORK_CONF_H
+
+#define SERVER_IP "${IP}"
+#define SERVER_PORT ${PORT}
+#define WIFI_SSID "${SSID}"
+#define WIFI_PWORD "${PWORD}"
+
+#endif  // _NETWORK_CONF_H

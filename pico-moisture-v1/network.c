@@ -1,4 +1,5 @@
 #include "network.h"
+#include "network_conf.h"
 #include "lwip/tcp.h"
 #include "pico/cyw43_arch.h"
 
@@ -21,8 +22,8 @@ typedef struct
 } TCP_CLIENT_T;
 
 TCP_CLIENT_T *client_state = 0;
-const char server_ip[] = "192.168.20.26";
-const uint32_t server_port = 50000;
+const char server_ip[] = SERVER_IP;
+const uint32_t server_port = SERVER_PORT;
 const uint32_t poll_interval_s = 2;
 static STATE state = IDLE;
 static uint8_t sequence = 0;

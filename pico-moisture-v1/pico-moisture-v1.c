@@ -3,6 +3,7 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "network.h"
+#include "network_conf.h"
 
 extern cyw43_t cyw43_state;
 
@@ -25,8 +26,8 @@ typedef struct SCAN_RESULT
 
 static STATE state = WAIT_FOR_SCAN;
 static SCAN_RESULT_t *scan_result = 0;
-static const char my_ssid[] = "P&C_Printer";
-static const char my_key[] = "0424676158";
+static const char my_ssid[] = WIFI_SSID;
+static const char my_key[] = WIFI_PWORD;
 static uint32_t last_send_complete_time = 0;
 static uint32_t current_time = 0;
 

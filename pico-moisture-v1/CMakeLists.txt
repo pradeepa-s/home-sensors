@@ -30,9 +30,27 @@ project(pico-moisture-v1 C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
+set(IP "192.168.20.42")
+set(PORT 50000)
+set(SSID "P&C_Printer")
+set(PWORD "")
 
+if(IP AND PORT AND SSID AND PWORD)
+  message("IP is ${IP}")
+  message("PORT is ${PORT}")
+  message("SSID is ${SSID}")
+  message("PWORD is ${PWORD}")
+else()
+  message(FATAL_ERROR "Define network configuations.")
+endif()
+
+# Generate a header with all build args for wifi-name, wifi-password, ip, port
+configure_file(${CMAKE_CURRENT_LIST_DIR}/network_conf.h.in ${CMAKE_SOURCE_DIR}/generated/network_conf.h)
+
+# Add executable. Default name is the project name, version 0.1
 add_executable(pico-moisture-v1 pico-moisture-v1.c network.c)
+
+# add_dependencies(${CMAKE_PROJECT_NAME} NetworkHeader)
 
 pico_set_program_name(pico-moisture-v1 "pico-moisture-v1")
 pico_set_program_version(pico-moisture-v1 "0.1")
@@ -50,6 +68,7 @@ target_link_libraries(pico-moisture-v1
 target_include_directories(pico-moisture-v1 PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}
   ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts or any other standard includes, if required
+  ${CMAKE_CURRENT_LIST_DIR}/generated
 )
 
 pico_add_extra_outputs(pico-moisture-v1)
