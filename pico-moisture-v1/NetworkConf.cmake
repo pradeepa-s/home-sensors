@@ -1,0 +1,1 @@
+configure_file(${CMAKE_CURRENT_LIST_DIR}/network_conf.h.in ${CMAKE_SOURCE_DIR}/generated/network_conf.h)

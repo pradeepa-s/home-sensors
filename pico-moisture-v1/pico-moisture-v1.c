@@ -2,56 +2,34 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
-#include "network.h"
-#include "network_conf.h"
+#include "network_controller.h"
+#include "wifi_controller.h"
+#include "measurement_engine.h"
 
 extern cyw43_t cyw43_state;
 
 typedef enum{
-    WAIT_FOR_SCAN,
-    SCAN_COMPLETE,
-    CONNECT_TO_WIFI,
-    SEND_DATA,
-    WAIT_FOR_DATA_COMPLETE,
-    WAIT_FOR_TIMEOUT,
-    DONE
+    START_WIFI_CONTROLLER,
+    SERVICE_WIFI_CONTROLLER,
+    START_CORE,
+    SERVICE_CORE,
+    APP_RECOVERY
 } STATE;
 
-typedef struct SCAN_RESULT
-{
-    cyw43_ev_scan_result_t result;
-    struct SCAN_RESULT *next;
-} SCAN_RESULT_t;
+typedef enum{
+    TD_SEND,
+    TD_WAIT_SEND_COMPLETE,
+    TD_WAIT_FOR_RETRIGGER
+} TD_STATE;
 
-
-static STATE state = WAIT_FOR_SCAN;
-static SCAN_RESULT_t *scan_result = 0;
-static const char my_ssid[] = WIFI_SSID;
-static const char my_key[] = WIFI_PWORD;
+static TD_STATE test_data_state = TD_SEND;
+static STATE state = START_WIFI_CONTROLLER;
 static uint32_t last_send_complete_time = 0;
-static uint32_t current_time = 0;
+static void test_data_trigger();
 
-static void print_scan_results();
-static void connect_to_wifi();
 
-int wifi_scan_callback(void *arg, const cyw43_ev_scan_result_t* results) {
-    if (scan_result == 0) {
-        scan_result = calloc(1, sizeof(SCAN_RESULT_t));
-        memcpy(&(scan_result->result), results, sizeof(cyw43_ev_scan_result_t));
-        scan_result->next = 0;
-    }
-    else {
-        SCAN_RESULT_t *last = scan_result;
-
-        while (last->next) {
-            last = last->next;
-        }
-
-        SCAN_RESULT_t *new_result = calloc(1, sizeof(SCAN_RESULT_t));
-        memcpy(&(new_result->result), results, sizeof(cyw43_ev_scan_result_t));
-        last->next = new_result;
-        new_result->next = 0;
-    }
+void measurement_data_available(uint32_t data) {
+    network_controller_submit_data(data);
 }
 
 int main()
@@ -63,82 +41,84 @@ int main()
         return -1;
     }
 
-    cyw43_arch_enable_sta_mode();
-
-    cyw43_wifi_scan_options_t scan_opt;
-    scan_opt.ssid_len = 0;
-    scan_opt.scan_type = 0;
-    if (cyw43_wifi_scan(&cyw43_state, &scan_opt, NULL, &wifi_scan_callback) != 0) {
-        printf("Scan failed to start \n\r");
-        return -1;
-    }
-
     while (true) {
-        switch (state){
-            case WAIT_FOR_SCAN:
-                if (!cyw43_wifi_scan_active(&cyw43_state)) {
-                    state = SCAN_COMPLETE;
-                }
+        switch (state)
+        {
+        case START_WIFI_CONTROLLER:
+            wifi_controller_start();
+            state = SERVICE_WIFI_CONTROLLER;
             break;
 
-            case SCAN_COMPLETE:
-                printf("Scan completed.\n\r");
-                print_scan_results();
-                state = CONNECT_TO_WIFI;
+        case SERVICE_WIFI_CONTROLLER:
+            wifi_controller_service();
+
+            if (wifi_controller_get_status() == WIFI_CTRL_STATUS_CONNECTED) {
+                state = START_CORE;
+            }
+            else if (wifi_controller_get_status() == WIFI_CTRL_STATUS_ERROR) {
+                state = APP_RECOVERY;
+            }
             break;
 
-            case CONNECT_TO_WIFI:
-                connect_to_wifi();
+        case START_CORE:
+            network_controller_start();
+            measurement_engine_start(measurement_data_available);
+            state = SERVICE_CORE;
             break;
 
-            case SEND_DATA:
-                start_network();
-                state = WAIT_FOR_DATA_COMPLETE;
+        case SERVICE_CORE:
+            // test_data_trigger();
+            measurement_engine_service();
+            network_controller_service();
+
+            if (measurement_engine_get_status() == MEASUREMENT_ENGINE_STATUS_ERROR) {
+                state = APP_RECOVERY;
+            }
+
+            if (network_controller_get_status() == NETWORK_CONTROLLER_STATUS_ERROR) {
+                state = APP_RECOVERY;
+            }
+
             break;
 
-            case WAIT_FOR_DATA_COMPLETE:
-                if (run_network() == false) {
-                    last_send_complete_time = to_ms_since_boot(get_absolute_time());
-                    state = WAIT_FOR_TIMEOUT;
-                }
+        case APP_RECOVERY:
             break;
 
-            case WAIT_FOR_TIMEOUT:
-                    current_time = to_ms_since_boot(get_absolute_time());
-                    if (current_time - last_send_complete_time > 3000) {
-                        state = SEND_DATA;
-                    }
-            break;
-            case DONE:
+        default:
             break;
         }
 
-        run_network();
         cyw43_arch_poll();
     }
 }
 
-void print_scan_results()
+void test_data_trigger()
 {
-    int i = 0;
-    for (SCAN_RESULT_t *result = scan_result; result; result = result->next, i++) {
-        printf("\t Result[%d]:\n\r", i);
-        printf("\t\t SSID: %-32s\n\r", result->result.ssid);
-        printf("\t\t RSSI: %4d\n\r", result->result.rssi);
-        printf("\t\t AUTH: %d\n\r", result->result.auth_mode);
-        printf("\t-------------------\n\r");
-    }
-}
+    uint32_t current_time = 0;
 
-void connect_to_wifi()
-{
-    if (cyw43_arch_wifi_connect_timeout_ms(my_ssid, my_key, CYW43_AUTH_WPA2_AES_PSK, 30000) != 0) {
-        printf("Failed to connect... retrying...\n\r");
-        state = CONNECT_TO_WIFI;
-    }
-    else {
-        const uint8_t *ip_address = (uint8_t*)&(cyw43_state.netif[0].ip_addr.addr);
-        printf("IP address %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
-        state = SEND_DATA;
+    switch (test_data_state){
+    case TD_SEND:
+        if (network_controller_get_status() == NETWORK_CONTROLLER_STATUS_IDLE) {
+            // network_controller_trigger();
+            test_data_state = TD_WAIT_SEND_COMPLETE;
+        }
+    break;
+
+    case TD_WAIT_SEND_COMPLETE:
+        if (network_controller_get_status() == NETWORK_CONTROLLER_STATUS_IDLE) {
+            test_data_state = TD_WAIT_FOR_RETRIGGER;
+            last_send_complete_time = to_ms_since_boot(get_absolute_time());
+        }
+    break;
+
+    case TD_WAIT_FOR_RETRIGGER:
+        current_time = to_ms_since_boot(get_absolute_time());
+        if (current_time - last_send_complete_time > 3000) {
+            test_data_state = TD_SEND;
+        }
+    break;
+
+    default:
+    break;
     }
 }

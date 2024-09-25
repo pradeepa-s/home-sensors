@@ -30,25 +30,26 @@ project(pico-moisture-v1 C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-set(IP "192.168.20.42")
-set(PORT 50000)
-set(SSID "P&C_Printer")
-set(PWORD "")
-
-if(IP AND PORT AND SSID AND PWORD)
-  message("IP is ${IP}")
-  message("PORT is ${PORT}")
-  message("SSID is ${SSID}")
-  message("PWORD is ${PWORD}")
+if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/wifi_credentials.json)
+  file(READ ${CMAKE_CURRENT_LIST_DIR}/wifi_credentials.json WIFI_CREDENTIALS)
+  string(JSON IP GET ${WIFI_CREDENTIALS} ip)
+  string(JSON PORT GET ${WIFI_CREDENTIALS} port)
+  string(JSON SSID GET ${WIFI_CREDENTIALS} ssid)
+  string(JSON PWORD GET ${WIFI_CREDENTIALS} pword)
 else()
-  message(FATAL_ERROR "Define network configuations.")
+  message(FATAL_ERROR "Please create the wifi_credentials file.")
 endif()
+
+message("IP is ${IP}")
+message("PORT is ${PORT}")
+message("SSID is ${SSID}")
+message("PWORD is ${PWORD}")
 
 # Generate a header with all build args for wifi-name, wifi-password, ip, port
 configure_file(${CMAKE_CURRENT_LIST_DIR}/network_conf.h.in ${CMAKE_SOURCE_DIR}/generated/network_conf.h)
 
 # Add executable. Default name is the project name, version 0.1
-add_executable(pico-moisture-v1 pico-moisture-v1.c network.c)
+add_executable(pico-moisture-v1 pico-moisture-v1.c network_controller.c wifi_controller.c measurement_engine.c)
 
 # add_dependencies(${CMAKE_PROJECT_NAME} NetworkHeader)
 
@@ -61,6 +62,7 @@ pico_enable_stdio_usb(pico-moisture-v1 0)
 
 # Add the standard library to the build
 target_link_libraries(pico-moisture-v1
+        hardware_adc
         pico_stdlib
         pico_cyw43_arch_lwip_poll)
 
