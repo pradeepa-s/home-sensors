@@ -173,6 +173,7 @@ void send_data()
     uint8_t msg[100] = {'*', '*', '*', 'S', 'N', 'S', '0', '0', '1'};
     if (avail_size > sizeof(msg)) {
         memcpy(&msg[9], &queued_data, sizeof(queued_data));
+        msg[9 + sizeof(queued_data)] = ':';
         cyw43_arch_lwip_begin();
         if (tcp_write(client_state->p_tcp_pcb, (const void*)msg, sizeof(msg), 0) == ERR_OK) {
             if (tcp_output(client_state->p_tcp_pcb) == ERR_OK) {
