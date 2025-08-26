@@ -12,7 +12,7 @@ bool ledOn = false;
 const char* ssid = "P&C_Printer";
 const char* password = "0424676158";
 
-const char* mqtt_server = "192.168.20.42";
+const char* mqtt_server = "rpimain.local";
 const int mqtt_port = 1883;
 const char* measurement_topic = "node/measure-v1";
 const char* controller_topic = "controller/cmd-v1";
@@ -65,7 +65,8 @@ void mqtt_rx_callback(char* topic, byte* payload, unsigned int length) {
   if (topic_str.equals(controller_topic)) {
     Serial.print("Message: ");
     Serial.println(payload[0]);
-    if (payload[0] == '1') {
+    
+    if (String((char)payload[0]) == String(id)) {
       sync_measurements = true;
     }
   }
@@ -139,7 +140,12 @@ void reconnect() {
       Serial.print("Failed, rc=");
       Serial.print(mqtt.state());
       Serial.println(" try again in 5 seconds.");
-      delay(5000);
+      for (int i = 0; i < 10; i++) {
+        delay(250);
+        digitalWrite(LED, HIGH);
+        delay(250);
+        digitalWrite(LED, LOW);
+      }
     }
   }
 }
@@ -147,9 +153,9 @@ void reconnect() {
 
 void loop() {
   digitalWrite(LED, ledOn ? HIGH : LOW);
-  if (!mqtt.connected()) {
-    reconnect();
-  }
+
+  reconnect();
+
   mqtt.loop();
 
   if (sync_measurements) {
