@@ -14,12 +14,12 @@ const char* password = "0424676158";
 
 const char* mqtt_server = "rpimain.local";
 const int mqtt_port = 1883;
-const char* measurement_topic = "node/measure-v1";
-const char* controller_topic = "controller/cmd-v1";
+const uint32_t id = 2;
+const char* cmd_topic = "esp32/2/cmd";
+const char* data_topic = "esp32/2/data";
+const char* event_topic = "esp32/2/event";
 
 const int BatteryPin = 34;
-
-const uint32_t id = 1;
 
 bool sync_measurements = false;
 WiFiClient wifi;
@@ -62,12 +62,28 @@ void mqtt_rx_callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(topic);
   Serial.print("]: ");
   String topic_str(topic);
-  if (topic_str.equals(controller_topic)) {
-    Serial.print("Message: ");
-    Serial.println(payload[0]);
-    
-    if (String((char)payload[0]) == String(id)) {
-      sync_measurements = true;
+  if (topic_str.equals(cmd_topic)) {    
+    for (int i = 0; i < length; i++) {
+      Serial.print("0x");
+      Serial.print(payload[i], HEX);
+      if (i < length - 1) {
+        Serial.print(", ");
+      }      
+    }
+
+    Serial.println();
+
+    if (length >= 4) {
+      const uint16_t cmd_length = (payload[0] << 8) | payload[1];
+      const uint16_t cmd = (payload[2] << 8) | payload[3];
+      Serial.print("Decoded length: 0x");
+      Serial.println(cmd_length, HEX);
+      Serial.print("Decoded cmd: 0x");
+      Serial.println(cmd, HEX);
+
+      if (cmd == 0x01) {
+        sync_measurements = true;
+      }
     }
   }
   Serial.println();
@@ -121,19 +137,19 @@ void setup() {
   delay(1000);
   setup_wifi();
   setup_mqtt();
-  setup_tsensor();
-  setup_battery_mon();
+  //setup_tsensor();
+  //setup_battery_mon();
 }
 
 void reconnect() {
   while (!mqtt.connected()) {
     Serial.print("Attempting MQTT connection...");
 
-    String clientId = "Node-";
+    String clientId = "esp32-";
     clientId += String(id, HEX);
 
     if (mqtt.connect(clientId.c_str())) {
-      mqtt.subscribe(controller_topic);
+      mqtt.subscribe(cmd_topic);
       Serial.println("Connected");
     }
     else {
@@ -181,7 +197,7 @@ void loop() {
       msg += ",\"bat_v1\":";
       msg += bat_voltage;
       msg += "}";
-      mqtt.publish(measurement_topic, msg.c_str());
+      mqtt.publish(data_topic, msg.c_str());
       // Serial.println("Message published!");
     }
   }
